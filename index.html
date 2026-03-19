@@ -192,7 +192,7 @@
         };
 
         // --- Takvim ---
-        const MiniCalendar = ({ selectedDate, onSelectDate, highlightedDates = [] }) => {
+        const MiniCalendar = ({ selectedDate, onSelectDate, highlightedDates = [], holidays = [] }) => {
             const [currentDate, setCurrentDate] = useState(new Date("2026-03-01T00:00:00"));
 
             const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -229,6 +229,11 @@
 
                             const isSelected = selectedDate === fullDateStr;
                             const isHighlighted = highlightedDates.includes(fullDateStr);
+                            const isHoliday = Array.isArray(holidays) && holidays.some(h => {
+                                if (!h || !h.date) return false;
+                                const [y, m, d_api] = h.date.split('-');
+                                return `${d_api}.${m}.${y}` === fullDateStr;
+                            });
 
                             return (
                                 <div
@@ -238,7 +243,10 @@
                                 >
                                     {d}
                                     {isHighlighted && !isSelected && (
-                                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-500 rounded-full"></div>
+                                        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-500 rounded-full"></div>
+                                    )}
+                                    {isHoliday && !isSelected && (
+                                        <div className="absolute top-1 right-1 w-1 h-1 bg-red-500 rounded-full" title="Resmi Tatil"></div>
                                     )}
                                 </div>
                             );
@@ -549,13 +557,31 @@
 
         const parseTime = (str) => {
             if (!str) return 0;
-            const [h, m] = str.split(':').map(Number);
+            // Hem ':' hem '.' ayraçlarını destekle
+            const parts = str.includes(':') ? str.split(':') : str.split('.');
+            const [h, m] = parts.map(Number);
             return (h * 60) + (m || 0);
         };
 
         const App = () => {
             const [files, setFiles] = useState([]);
             const [parsedRows, setParsedRows] = useState([]);
+            const [holidays, setHolidays] = useState([]); // Türkiye Resmi Tatilleri
+            // Tatilleri API'den çek
+            useEffect(() => {
+                const fetchHolidays = async () => {
+                    try {
+                        const response = await fetch('https://date.nager.at/api/v3/PublicHolidays/2026/TR');
+                        if (response.ok) {
+                            const data = await response.json();
+                            setHolidays(data);
+                        }
+                    } catch (err) {
+                        console.error("Tatil günleri çekilemedi:", err);
+                    }
+                };
+                fetchHolidays();
+            }, []);
 
             const [personnelList, setPersonnelList] = useState([
                 { name: "FATİH ÇAĞATAY KAPLAN", department: "Bilgi Teknolojileri Dairesi Başkanlığı", isActive: true },
@@ -992,9 +1018,10 @@
                 }
                 let lastFoundDate = documentDate;
 
-                lines.forEach(line => {
+                lines.forEach((line, idx) => {
                     let cleanLine = line.trim();
                     if (!cleanLine) return;
+
 
                     let rowDate = documentDate;
                     const dateMatch = cleanLine.match(dateRegex);
@@ -1141,9 +1168,15 @@
                 const processedDays = [];
 
                 recordMap.forEach((dayData) => {
-                    dayData.allTimes.sort((a, b) => a - b);
+                    // Şüpheli gece yarısı verilerini filtrele (örn: 00:04 gibi sayfa altlıkları)
+                    // Eğer gün içinde 05:00'dan sonra herhangi bir kayıt varsa, 05:00 öncesini "çöp veri" kabul et.
+                    const hasValidDayTime = dayData.allTimes.some(t => t > 300); // 300 dk = 05:00
+                    if (hasValidDayTime) {
+                        dayData.allTimes = dayData.allTimes.filter(t => t > 300);
+                    }
 
-                    const combinedNotes = Array.from(dayData.notes).join(" ");
+                    dayData.allTimes.sort((a, b) => a - b);
+                    const combinedNotes = Array.from(dayData.notes || []).join(" ");
 
                     const [dayStr, monthStr, yearStr] = dayData.date.split('.');
                     const d = new Date(yearStr, monthStr - 1, dayStr);
@@ -1153,6 +1186,10 @@
                     const firstEntry = dayData.allTimes.length > 0 ? dayData.allTimes[0] : null;
                     const lastExit = dayData.allTimes.length > 1 ? dayData.allTimes[dayData.allTimes.length - 1] : null;
 
+                    if (dayData && (dayData.name === "AYKUT YAŞ" || dayData.name === "AYKUŞ YAŞ")) {
+                        console.log("DEBUG AYKUT:", dayData.date, "Times:", dayData.allTimes.map(minutesToTime), "Notes:", combinedNotes);
+                    }
+
                     let isAbsent = false;
                     let isLate = false;
                     let isEarlyExit = false;
@@ -1160,7 +1197,14 @@
                     let isOvertime = false;
                     let isOnLeave = false;
 
-                    const isWeekendOrHoliday = isWeekend || combinedNotes.includes("HAFTASONU") || combinedNotes.includes("TATİL");
+                    // Dinamik Tatil Kontrolü (API'den gelen verilerle)
+                    const isApiHoliday = Array.isArray(holidays) && holidays.some(h => {
+                        if (!h || !h.date) return false;
+                        const [y, m, d_api] = h.date.split('-');
+                        return `${d_api}.${m}.${y}` === dayData.date;
+                    });
+
+                    const isWeekendOrHoliday = isWeekend || isApiHoliday || combinedNotes.includes("HAFTASONU") || combinedNotes.includes("TATİL");
 
                     if (combinedNotes.includes("İZİN") || combinedNotes.includes("RAPOR") || combinedNotes.includes("GÖREVLİ")) {
                         isOnLeave = true;
@@ -1209,8 +1253,8 @@
                             // KURAL: Çıkış saati YOKSA (veya ÇIKIŞ YOK hatası varsa) hesaplama.
                             // Sadece çıkış saati varsa (effectiveExit !== null) hesapla.
                             if (effectiveExit !== null) {
-                                // 1. Akşam 18:30'den sonra çıkış (GİRİŞE BAKILMIYOR ARTIK)
-                                const isLateEnd = effectiveExit > RULES.standardEnd;
+                                // Hafta içi 19:31 sonrası çıkışlar mesaidir (18:30-19:30 mola kabul edilir)
+                                const isLateEnd = effectiveExit >= 1171; // 19:31
 
                                 if (isLateEnd) {
                                     isOvertime = true;
@@ -1404,6 +1448,7 @@
                                 selectedDate={selectedCalendarDate}
                                 onSelectDate={setSelectedCalendarDate}
                                 highlightedDates={uniqueDatesList}
+                                holidays={holidays}
                             />
                         </div>
 
@@ -1705,6 +1750,7 @@
                                         </div>
                                         <div
                                             onClick={() => setActiveFilter('OVERTIME')}
+                                            title="Mesai kuralı: Hafta içi 19:31 sonrası çıkışlar mesai sayılır. 18:30-19:30 arası mola kabul edilir."
                                             className={`bg-white shadow-sm p-4 rounded-xl border cursor-pointer hover:bg-purple-50/50 transition ${activeFilter === 'OVERTIME' ? 'border-purple-500 ring-1 ring-purple-500' : 'border-gray-200'}`}
                                         >
                                             <p className="text-[11px] text-purple-600 font-bold uppercase tracking-wider flex items-center gap-1 mb-1.5">
