@@ -573,53 +573,82 @@
             const [files, setFiles] = useState([]);
             const [parsedRows, setParsedRows] = useState([]);
             const [holidays, setHolidays] = useState([]); // Türkiye Resmi Tatilleri
-            // Tatilleri API'den çek + Manuel Türkiye Özel Günleri
+            // Dinamik Tatil ve Özel Gün Üreticisi
             useEffect(() => {
                 const fetchHolidays = async () => {
-                    // Türkiye'ye özgü sabit ve anma günleri (Bazıları tatil değildir ama takvimde istenir)
-                    const specialDays = [
-                        { date: '2026-01-01', name: 'Yılbaşı', isHoliday: true },
-                        { date: '2026-03-18', name: 'Çanakkale Zaferi', isHoliday: false },
-                        { date: '2026-03-20', name: 'Ramazan Bayramı Arifesi', isHoliday: true },
-                        { date: '2026-03-21', name: 'Ramazan Bayramı 1. Gün', isHoliday: true },
-                        { date: '2026-03-22', name: 'Ramazan Bayramı 2. Gün', isHoliday: true },
-                        { date: '2026-03-23', name: 'Ramazan Bayramı 3. Gün', isHoliday: true },
-                        { date: '2026-04-23', name: '23 Nisan Çocuk Bayramı', isHoliday: true },
-                        { date: '2026-05-01', name: '1 Mayıs İşçi Bayramı', isHoliday: true },
-                        { date: '2026-05-19', name: '19 Mayıs Gençlik ve Spor Bayramı', isHoliday: true },
-                        { date: '2026-05-26', name: 'Kurban Bayramı Arifesi', isHoliday: true },
-                        { date: '2026-05-27', name: 'Kurban Bayramı 1. Gün', isHoliday: true },
-                        { date: '2026-05-28', name: 'Kurban Bayramı 2. Gün', isHoliday: true },
-                        { date: '2026-05-29', name: 'Kurban Bayramı 3. Gün', isHoliday: true },
-                        { date: '2026-05-30', name: 'Kurban Bayramı 4. Gün', isHoliday: true },
-                        { date: '2026-07-15', name: '15 Temmuz Demokrasi Bayramı', isHoliday: true },
-                        { date: '2026-08-30', name: '30 Ağustos Zafer Bayramı', isHoliday: true },
-                        { date: '2026-10-29', name: '29 Ekim Cumhuriyet Bayramı', isHoliday: true },
-                        { date: '2026-11-10', name: '10 Kasım Atatürk\'ü Anma', isHoliday: false }
+                    const year = currentDate.getFullYear();
+                    
+                    // 1. Sabit Özel Günler (Her yıl aynı tarihtedir)
+                    const fixedSpecialDays = [
+                        { date: `${year}-01-01`, name: 'Yılbaşı', isHoliday: true },
+                        { date: `${year}-03-18`, name: 'Çanakkale Zaferi', isHoliday: false },
+                        { date: `${year}-04-23`, name: '23 Nisan Çocuk Bayramı', isHoliday: true },
+                        { date: `${year}-05-01`, name: '1 Mayıs İşçi Bayramı', isHoliday: true },
+                        { date: `${year}-05-19`, name: '19 Mayıs Gençlik ve Spor Bayramı', isHoliday: true },
+                        { date: `${year}-07-15`, name: '15 Temmuz Demokrasi Bayramı', isHoliday: true },
+                        { date: `${year}-08-30`, name: '30 Ağustos Zafer Bayramı', isHoliday: true },
+                        { date: `${year}-10-29`, name: '29 Ekim Cumhuriyet Bayramı', isHoliday: true },
+                        { date: `${year}-11-10`, name: '10 Kasım Atatürk\'ü Anma', isHoliday: false }
                     ];
 
                     try {
-                        const response = await fetch('https://date.nager.at/api/v3/PublicHolidays/2026/TR');
+                        const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/TR`);
                         if (response.ok) {
                             const apiData = await response.json();
-                            // API verisi ile manuel listeyi birleştir (Tekilleştirerek)
-                            const combined = [...specialDays];
-                            apiData.forEach(apiH => {
-                                if (!combined.find(c => c.date === apiH.date)) {
-                                    combined.push({ date: apiH.date, name: apiH.localName, isHoliday: true });
+                            const dynamicHolidays = [];
+
+                            apiData.forEach(h => {
+                                const baseDate = new Date(h.date);
+                                
+                                // Dini Bayram Tespiti (Ramazan ve Kurban)
+                                const isRamadan = h.name.includes("Eid al-Fitr") || h.localName.includes("Ramazan");
+                                const isQurban = h.name.includes("Eid al-Adha") || h.localName.includes("Kurban");
+
+                                if (isRamadan) {
+                                    // Arife (T-1), 2. Gün (T+1), 3. Gün (T+2)
+                                    for (let i = -1; i <= 2; i++) {
+                                        const d = new Date(baseDate);
+                                        d.setDate(d.getDate() + i);
+                                        const dateStr = d.toISOString().split('T')[0];
+                                        const label = i === -1 ? 'Ramazan Bayramı Arifesi' : (i === 0 ? 'Ramazan Bayramı 1. Gün' : `Ramazan Bayramı ${i+1}. Gün`);
+                                        dynamicHolidays.push({ date: dateStr, name: label, isHoliday: true });
+                                    }
+                                } else if (isQurban) {
+                                    // Arife (T-1), 2. Gün (T+1), 3. Gün (T+2), 4. Gün (T+3)
+                                    for (let i = -1; i <= 3; i++) {
+                                        const d = new Date(baseDate);
+                                        d.setDate(d.getDate() + i);
+                                        const dateStr = d.toISOString().split('T')[0];
+                                        const label = i === -1 ? 'Kurban Bayramı Arifesi' : (i === 0 ? 'Kurban Bayramı 1. Gün' : `Kurban Bayramı ${i+1}. Gün`);
+                                        dynamicHolidays.push({ date: dateStr, name: label, isHoliday: true });
+                                    }
+                                } else {
+                                    // Diğer tatiller (Eğer manuel listemizde yoksa ekle)
+                                    if (!fixedSpecialDays.find(fs => fs.date === h.date)) {
+                                        dynamicHolidays.push({ date: h.date, name: h.localName, isHoliday: true });
+                                    }
                                 }
                             });
-                            setHolidays(combined);
+
+                            // Manuel sabit günler ile dinamik verileri birleştir (Tekilleştirerek)
+                            const finalHolidays = [...fixedSpecialDays];
+                            dynamicHolidays.forEach(dh => {
+                                if (!finalHolidays.find(f => f.date === dh.date)) {
+                                    finalHolidays.push(dh);
+                                }
+                            });
+
+                            setHolidays(finalHolidays);
                         } else {
-                            setHolidays(specialDays); // API hata verirse en azından manuel liste çalışsın
+                            setHolidays(fixedSpecialDays);
                         }
                     } catch (err) {
-                        console.error("Tatil günleri çekilemedi:", err);
-                        setHolidays(specialDays);
+                        console.error("Tatil verisi çekilemedi:", err);
+                        setHolidays(fixedSpecialDays);
                     }
                 };
                 fetchHolidays();
-            }, []);
+            }, [currentDate.getFullYear()]);
 
             const [personnelList, setPersonnelList] = useState([
                 { name: "FATİH ÇAĞATAY KAPLAN", department: "Bilgi Teknolojileri Dairesi Başkanlığı", isActive: true },
@@ -693,7 +722,7 @@
                 { name: "YUSUF KÜRŞAD YILDIRIM", department: "Yazılım ve Ar-Ge Şube Müdürlüğü", isActive: true },
                 { name: "DERYA AKTAŞ", department: "Bilgi İşlem Merkezi Müdürlüğü", isActive: true },
                 { name: "ÖZCAN ÇAVGA", department: "Yazılım ve Ar-Ge Şube Müdürlüğü", isActive: true },
-                { name: "AYKUT YAŞ", department: "Bilgi İşlem Merkezi Müdürlüğü", isActive: true },
+                { name: "AYKUŞ YAŞ", department: "Bilgi İşlem Merkezi Müdürlüğü", isActive: true },
                 { name: "MUHAMMED ENES ARSLAN", department: "Veri Yönetim Şube Müdürlüğü", isActive: true },
                 { name: "ESAT KALKAN", department: "Bilgi İşlem Merkezi Müdürlüğü", isActive: true },
                 { name: "MERT YÖRDEM", department: "Bilgi İşlem Merkezi Müdürlüğü", isActive: true },
@@ -1142,7 +1171,8 @@
                 const mappedRows = parsedRows.map(row => {
                     let finalName = row.name;
                     for (const p of personnelList) {
-                        if (finalName.includes(p.name)) {
+                        // Alias Desteği: PDF'te "AYKUT YAŞ" yazsa bile "AYKUŞ YAŞ" olarak eşleştir
+                        if (finalName.includes(p.name) || (p.name === "AYKUŞ YAŞ" && finalName.includes("AYKUT YAŞ"))) {
                             finalName = p.name;
                             break;
                         }
@@ -1224,9 +1254,6 @@
                     const firstEntry = dayData.allTimes.length > 0 ? dayData.allTimes[0] : null;
                     const lastExit = dayData.allTimes.length > 1 ? dayData.allTimes[dayData.allTimes.length - 1] : null;
 
-                    if (dayData && (dayData.name === "AYKUT YAŞ" || dayData.name === "AYKUŞ YAŞ")) {
-                        console.log("DEBUG AYKUT:", dayData.date, "Times:", dayData.allTimes.map(minutesToTime), "Notes:", combinedNotes);
-                    }
 
                     let isAbsent = false;
                     let isLate = false;
