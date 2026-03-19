@@ -550,14 +550,15 @@
                     return { ...row, matchedName: finalName };
                 });
 
-                const allNamesInPdf = [...new Set(mappedRows.map(r => r.matchedName))];
-                const allPersonnelToTrack = [...new Set([...personnelList, ...allNamesInPdf])].sort((a, b) => a.localeCompare(b, 'tr-TR'));
-
                 const recordMap = new Map();
 
-                // Çapraz Matris (Günler x Personeller) başlanıyor. Boş kayıtlar Gelmedi olarak açılır:
+                // Matris Dinamik Oluşturma (Sadece O Tarihte PDF'te Adı Geçenler)
                 uniqueDatesList.forEach(date => {
-                    allPersonnelToTrack.forEach(name => {
+                    const personnelForThisDate = [...new Set(
+                        mappedRows.filter(r => r.date === date).map(r => r.matchedName)
+                    )].sort((a, b) => a.localeCompare(b, 'tr-TR'));
+
+                    personnelForThisDate.forEach(name => {
                         recordMap.set(`${date}|${name}`, {
                             date: date,
                             name: name,
@@ -1120,8 +1121,8 @@
                                                     );
                                                 }
 
-                                                return dateKeys.map(dateKey => (
-                                                    <details key={dateKey} className="group border-b border-gray-100 last:border-none" open={true}>
+                                                return dateKeys.map((dateKey, idx) => (
+                                                    <details key={dateKey} className="group border-b border-gray-100 last:border-none" open={idx < 3}>
                                                         <summary className="flex cursor-pointer items-center justify-between bg-white px-5 py-4 hover:bg-gray-50/50 transition-colors list-none select-none outline-none">
                                                             <div className="flex items-center gap-3">
                                                                 <div className="w-8 h-8 rounded bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shadow-sm ring-1 ring-blue-100">
