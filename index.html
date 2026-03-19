@@ -225,7 +225,7 @@
             const [personnelList, setPersonnelList] = useState([
                 "ALPEREN AKTEMUR", "BATUHAN BAĞÇECİ", "ÇAĞRI UTKU SONAT",
                 "ELİF ERCAN", "ERDEM ALPAR", "NİGAR NURANSOY",
-                "SEVİL KANAAT", "TÜRKAN KAYRETLİ"
+                "SEVİL KANAAT", "TUBA UYGUNER", "TÜRKAN KAYRETLİ"
             ]);
             const [newPersonnelName, setNewPersonnelName] = useState("");
             const [selectedPersonnel, setSelectedPersonnel] = useState("TÜMÜ");
@@ -235,13 +235,13 @@
             const [stats, setStats] = useState(null);
             const [error, setError] = useState(null);
             const [activeFilter, setActiveFilter] = useState('ALL');
-            const [toleranceEnabled, setToleranceEnabled] = useState(false);
+            const [toleranceEnabled, setToleranceEnabled] = useState(true);
             const [toleranceMinutes, setToleranceMinutes] = useState(30);
 
-            const [morningStartStr, setMorningStartStr] = useState("09:30");
+            const [morningStartStr, setMorningStartStr] = useState("09:00");
             const [morningEndStr, setMorningEndStr] = useState("12:30");
             const [afternoonStartStr, setAfternoonStartStr] = useState("13:30");
-            const [afternoonEndStr, setAfternoonEndStr] = useState("17:30");
+            const [afternoonEndStr, setAfternoonEndStr] = useState("18:00");
             const [standardEndStr, setStandardEndStr] = useState("18:30");
             const [selectedPdfBlob, setSelectedPdfBlob] = useState(null);
             const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
@@ -450,60 +450,86 @@
                 const data = [];
                 const dateRegex = /(\d{2}\.\d{2}\.\d{4})/;
 
+                let documentDate = null;
+                if (sourceFile && sourceFile.name) {
+                    const matchPattern = sourceFile.name.match(dateRegex);
+                    if (matchPattern) documentDate = matchPattern[0];
+                }
+                let lastFoundDate = documentDate;
+
                 lines.forEach(line => {
                     let cleanLine = line.trim();
                     if (!cleanLine) return;
 
+                    let rowDate = documentDate;
                     const dateMatch = cleanLine.match(dateRegex);
+
                     if (dateMatch) {
-                        const dateString = dateMatch[0];
-                        const lineWithoutDate = cleanLine.replace(dateString, "   ");
-
-                        const timeRegex = /(\d{1,2}[:.]\d{2})/g;
-                        const times = lineWithoutDate.match(timeRegex) || [];
-
-                        // Gelişmiş İsim Ayıklama: Tüm saatleri, tarihleri ve keywordleri sıyırıp sadece harfleri elde etme
-                        let namePart = lineWithoutDate.replace(timeRegex, " ").toLocaleUpperCase('tr-TR');
-
-                        const wordsToRemove = ["GEÇ GİRİŞ", "ERKEN ÇIKIŞ", "ÇIKIŞ YOK", "GİRİŞ YOK", "GEÇ", "ERKEN", "GİRİŞ", "ÇIKIŞ", "GELMEDİ", "GELMEDI", "HAFTASONU", "GENEL TATİL", "GENEL TATIL", "İZİN", "IZIN", "RAPOR", "GÖREVLİ", "NORMAL", "YOK"];
-                        wordsToRemove.forEach(w => {
-                            namePart = namePart.split(w).join(" ");
-                        });
-
-                        namePart = namePart.replace(/[0-9\-_\*\/\\,;\"\(\)]/g, ' ');
-                        namePart = namePart.replace(/\s+/g, ' ').trim();
-
-                        if (namePart.length < 3) return;
-
-                        const excludeWords = ["SAYFA", "RAPOR", "TURNİKE", "ŞİRKET", "LİSTESİ", "TARİH", "SAAT"];
-                        if (excludeWords.some(ex => namePart.includes(ex))) return;
-
-                        let note = "";
-                        const keywords = ["GELMEDİ", "GELMEDI", "HAFTASONU", "GENEL TATİL", "GENEL TATIL", "ÇIKIŞ YOK", "GİRİŞ YOK", "İZİN", "IZIN", "RAPOR", "GÖREVLİ"];
-                        const upperLine = cleanLine.toLocaleUpperCase('tr-TR');
-
-                        keywords.forEach(k => {
-                            if (upperLine.includes(k.toLocaleUpperCase('tr-TR'))) {
-                                let normalizedKey = k;
-                                if (k === "GELMEDI") normalizedKey = "GELMEDİ";
-                                if (k === "GENEL TATIL") normalizedKey = "GENEL TATİL";
-                                if (k === "IZIN") normalizedKey = "İZİN";
-
-                                if (!note.toLocaleUpperCase('tr-TR').includes(normalizedKey.toLocaleUpperCase('tr-TR'))) {
-                                    note += normalizedKey + " ";
-                                }
-                            }
-                        });
-
-                        data.push({
-                            raw: cleanLine,
-                            name: namePart,
-                            date: dateString,
-                            foundTimes: times,
-                            note: note.trim(),
-                            sourceFile: sourceFile
-                        });
+                        if (!rowDate) rowDate = dateMatch[0];
+                        cleanLine = cleanLine.replace(dateMatch[0], "   ");
                     }
+                    if (!rowDate) rowDate = lastFoundDate;
+                    if (!rowDate) return;
+
+                    const timeRegex = /(\d{1,2}[:.]\d{2})/g;
+                    const times = cleanLine.match(timeRegex) || [];
+
+                    let namePart = cleanLine.replace(timeRegex, " ").toLocaleUpperCase('tr-TR');
+
+                    const wordsToRemove = [
+                        "GEÇ GİRİŞ", "ERKEN ÇIKIŞ", "ÇIKIŞ YOK", "GİRİŞ YOK", "GEÇ", "ERKEN",
+                        "GİRİŞ", "ÇIKIŞ", "GELMEDİ", "GELMEDI", "HAFTASONU", "GENEL TATİL", "GENEL TATIL",
+                        "YILLIK İZİNLİ", "YILLIK İZİN", "YILLIK İZIN", "İZİNLİ", "IZINLI", "İZİN", "IZIN",
+                        "RAPORLU", "RAPOR", "GÖREVLİ", "NORMAL", "YOK"
+                    ];
+                    wordsToRemove.forEach(w => {
+                        namePart = namePart.split(w).join(" ");
+                    });
+
+                    namePart = namePart.replace(/[0-9\-_\*\/\\,;\"\(\)]/g, ' ');
+                    namePart = namePart.replace(/\s+/g, ' ').trim();
+
+                    if (namePart.length < 3) return;
+
+                    const excludeWords = ["SAYFA", "RAPOR", "TURNİKE", "ŞİRKET", "LİSTESİ", "TARİH", "SAAT", "PERSONEL", "BELGE", "MÜDÜRLÜĞÜ", "DAİRESİ", "BAŞKANLIĞI"];
+                    if (excludeWords.some(ex => namePart.includes(ex))) return;
+
+                    const upperLine = cleanLine.toLocaleUpperCase('tr-TR');
+
+                    // Güvenlik: Eğer satırda hiç turnike saati yoksa (izin, tatil, başlık çöpleri vb)
+                    if (times.length === 0) {
+                        // O halde listeye alınması için geçerli bir personel adı taşıması ŞARTTIR.
+                        const isKnownPersonnel = personnelList.some(p => upperLine.includes(p));
+                        if (!isKnownPersonnel) return;
+                    }
+
+                    // Onaylandı, satırdaki veya belgedeki mevcut son tarihi yedeğe al:
+                    lastFoundDate = rowDate;
+
+                    let note = "";
+                    const keywords = ["GELMEDİ", "GELMEDI", "HAFTASONU", "GENEL TATİL", "GENEL TATIL", "ÇIKIŞ YOK", "GİRİŞ YOK", "YILLIK İZİNLİ", "YILLIK İZİN", "İZİNLİ", "IZINLI", "İZİN", "IZIN", "RAPORLU", "RAPOR", "GÖREVLİ"];
+
+                    keywords.forEach(k => {
+                        if (upperLine.includes(k)) {
+                            let normalizedKey = k;
+                            if (k.includes("GELMEDI")) normalizedKey = "GELMEDİ";
+                            if (k.includes("TATIL")) normalizedKey = "GENEL TATİL";
+                            if (k.includes("İZİN") || k.includes("IZIN") || k.includes("RAPOR") || k.includes("YILLIK")) normalizedKey = "İZİN";
+
+                            if (!note.includes(normalizedKey)) {
+                                note += normalizedKey + " ";
+                            }
+                        }
+                    });
+
+                    data.push({
+                        raw: cleanLine,
+                        name: namePart,
+                        date: rowDate,
+                        foundTimes: times,
+                        note: note.trim(),
+                        sourceFile: sourceFile
+                    });
                 });
 
                 return data;
@@ -676,7 +702,7 @@
                     if (isOvertime) overtimeCount++;
 
                     const displayEntry = (isAbsent || isOnLeave || firstEntry === null) ? '' : minutesToTime(firstEntry);
-                    const displayExit = (isAbsent || isOnLeave || combinedNotes.includes("ÇIKIŞ YOK") || effectiveExit === null) ? '' : minutesToTime(effectiveExit);
+                    const displayExit = (isAbsent || isOnLeave || effectiveExit === null) ? '' : minutesToTime(effectiveExit);
 
                     processedDays.push({
                         date: dayData.date,
@@ -1146,8 +1172,8 @@
                                                                                 <td className="whitespace-nowrap px-5 py-3.5 text-sm text-gray-600 font-mono tracking-tight">{day.exit || '-'}</td>
                                                                                 <td className="px-5 py-3.5 text-sm">
                                                                                     <div className="flex gap-1.5 flex-wrap">
-                                                                                        {day.isLate && <span className="inline-flex items-center rounded bg-yellow-100 px-2 py-0.5 text-[11px] font-semibold text-yellow-800 border border-yellow-200">Geç</span>}
-                                                                                        {day.isEarlyExit && <span className="inline-flex items-center rounded bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800 border border-orange-200">Erken</span>}
+                                                                                        {day.isLate && <span className="inline-flex items-center rounded bg-yellow-100 px-2 py-0.5 text-[11px] font-semibold text-yellow-800 border border-yellow-200">Geç Giriş</span>}
+                                                                                        {day.isEarlyExit && <span className="inline-flex items-center rounded bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800 border border-orange-200">Erken Çıkış</span>}
                                                                                         {day.isOvertime && <span className="inline-flex items-center rounded bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-800 border border-purple-200">Mesai</span>}
                                                                                         {day.status === 'Gelmedi' && <span className="inline-flex items-center rounded bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800 border border-red-200">Yok</span>}
                                                                                         {day.isOnLeave && <span className="inline-flex items-center rounded bg-teal-100 px-2 py-0.5 text-[11px] font-semibold text-teal-800 border border-teal-200">İzinli</span>}
