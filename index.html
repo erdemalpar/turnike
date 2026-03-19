@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turnike</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .drag-active {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+
+        /* Animasyonlar */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        .card-selected {
+            ring-width: 4px;
+            transform: scale(1.02);
+            transition: all 0.2s;
+        }
+
+        /* Input stili */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useCallback } = React;
+
+        // --- İkon Bileşenleri (SVG) ---
+
+        const Upload = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+        );
+
+        const FileText = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
+            </svg>
+        );
+
+        const User = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+            </svg>
+        );
+
+        const Clock = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+            </svg>
+        );
+
+        const BarChart = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+        );
+
+        const AlertCircle = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+        );
+
+        const Calendar = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+        );
+
+        const Briefcase = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+        );
+
+        const ChevronLeft = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="15 18 9 12 15 6"></polyline></svg>
+        );
+        const ChevronRight = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="9 18 15 12 9 6"></polyline></svg>
+        );
+
+        const Eye = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" /></svg>
+        );
+
+        const X = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+        );
+
+        const Edit = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
+        );
+
+        const Trash = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
+        );
+
+        // --- Yardımcı Fonksiyonlar ---
+
+        const timeToMinutes = (timeStr) => {
+            if (!timeStr) return null;
+            const cleanTime = timeStr.replace('.', ':').trim();
+            const [hours, minutes] = cleanTime.split(':').map(Number);
+            if (isNaN(hours) || isNaN(minutes)) return null;
+            return hours * 60 + minutes;
+        };
+
+        const minutesToTime = (mins) => {
+            if (mins === null || mins === undefined) return "";
+            const h = Math.floor(mins / 60).toString().padStart(2, '0');
+            const m = (mins % 60).toString().padStart(2, '0');
+            return `${h}:${m}`;
+        };
+
+        // --- Takvim ---
+        const MiniCalendar = ({ selectedDate, onSelectDate }) => {
+            const [currentDate, setCurrentDate] = useState(new Date("2026-03-01T00:00:00"));
+
+            const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+            const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+
+            const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+            const dayNames = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
+            const firstDayIndex = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
+
+            const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+            const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+
+            const days = [];
+            for (let i = 0; i < firstDayIndex; i++) days.push(null);
+            for (let i = 1; i <= daysInMonth; i++) days.push(i);
+
+            return (
+                <div className="w-full select-none font-sans mt-2">
+                    <div className="flex items-center justify-between mb-4 px-2">
+                        <button onClick={prevMonth} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-700 transition"><ChevronLeft className="w-4 h-4" /></button>
+                        <span className="font-bold text-[14px] text-gray-700">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</span>
+                        <button onClick={nextMonth} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-700 transition"><ChevronRight className="w-4 h-4" /></button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                        {dayNames.map(d => <span key={d} className="text-xs font-bold text-gray-400">{d}</span>)}
+                    </div>
+                    <div className="grid grid-cols-7 gap-y-1 gap-x-1 text-center text-[13px] text-gray-500 font-medium">
+                        {days.map((d, i) => {
+                            if (!d) return <div key={i} className="h-7 w-7 mx-auto"></div>;
+                            const dayStr = String(d).padStart(2, '0');
+                            const monthStr = String(currentDate.getMonth() + 1).padStart(2, '0');
+                            const yearStr = currentDate.getFullYear();
+                            const fullDateStr = `${dayStr}.${monthStr}.${yearStr}`;
+                            const isSelected = selectedDate === fullDateStr;
+                            return (
+                                <div key={i} onClick={() => onSelectDate(isSelected ? null : fullDateStr)} className={`h-7 w-7 mx-auto flex items-center justify-center rounded-full cursor-pointer transition-colors ${isSelected ? 'bg-blue-600 text-white font-bold shadow-md' : 'hover:bg-gray-100 text-gray-600'}`}>
+                                    {d}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Ana Uygulama ---
+
+        const parseTime = (str) => {
+            if (!str) return 0;
+            const [h, m] = str.split(':').map(Number);
+            return (h * 60) + (m || 0);
+        };
+
+        const App = () => {
+            const [files, setFiles] = useState([]);
+            const [parsedRows, setParsedRows] = useState([]);
+
+            const [personnelList, setPersonnelList] = useState([
+                "ALPEREN AKTEMUR", "BATUHAN BAĞÇECİ", "ÇAĞRI UTKU SONAT",
+                "ELİF ERCAN", "ERDEM ALPAR", "NİGAR NURANSOY",
+                "SEVİL KANAAT", "TÜRKAN KAYRETLİ"
+            ]);
+            const [newPersonnelName, setNewPersonnelName] = useState("");
+            const [selectedPersonnel, setSelectedPersonnel] = useState("TÜMÜ");
+            const [globalSearch, setGlobalSearch] = useState("");
+
+            const [isProcessing, setIsProcessing] = useState(false);
+            const [stats, setStats] = useState(null);
+            const [error, setError] = useState(null);
+            const [activeFilter, setActiveFilter] = useState('ALL');
+            const [toleranceEnabled, setToleranceEnabled] = useState(false);
+            const [toleranceMinutes, setToleranceMinutes] = useState(30);
+
+            const [morningStartStr, setMorningStartStr] = useState("09:30");
+            const [morningEndStr, setMorningEndStr] = useState("12:30");
+            const [afternoonStartStr, setAfternoonStartStr] = useState("13:30");
+            const [afternoonEndStr, setAfternoonEndStr] = useState("17:30");
+            const [standardEndStr, setStandardEndStr] = useState("18:30");
+            const [selectedPdfBlob, setSelectedPdfBlob] = useState(null);
+            const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
+
+            useEffect(() => {
+                const loadAutoPDFs = async () => {
+                    try {
+                        const response = await fetch('/turnike_kayıt/');
+                        if (!response.ok) return;
+                        const htmlText = await response.text();
+                        const pdfRegex = /href="([^"]+\.pdf)"/g;
+                        const pdfLinks = [];
+                        let match;
+                        while ((match = pdfRegex.exec(htmlText)) !== null) {
+                            let url = match[1];
+                            if (url.startsWith('&#47;')) url = url.replace(/&#47;/g, '/');
+                            pdfLinks.push(url);
+                        }
+                        if (pdfLinks.length === 0) return;
+                        setIsProcessing(true);
+                        let allParsedData = [];
+                        for (const link of pdfLinks) {
+                            const decodedLink = decodeURIComponent(link);
+                            const fileRes = await fetch(decodedLink);
+                            if (!fileRes.ok) continue;
+                            const arrayBuffer = await fileRes.arrayBuffer();
+                            const fileName = decodedLink.split('/').pop();
+                            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                            let fullText = "";
+                            for (let i = 1; i <= pdf.numPages; i++) {
+                                const page = await pdf.getPage(i);
+                                const textContent = await page.getTextContent();
+                                const items = textContent.items.map(it => ({ str: it.str, y: it.transform[5], x: it.transform[4] }));
+                                const rows = [];
+                                let currentRowY = -1;
+                                let currentRowText = [];
+                                items.sort((a, b) => b.y - a.y || a.x - b.x);
+                                items.forEach(it => {
+                                    if (currentRowY === -1 || Math.abs(it.y - currentRowY) > 5) {
+                                        if (currentRowText.length > 0) rows.push(currentRowText.join(""));
+                                        currentRowY = it.y;
+                                        currentRowText = [it.str];
+                                    } else { currentRowText.push(it.str); }
+                                });
+                                if (currentRowText.length > 0) rows.push(currentRowText.join(""));
+                                fullText += rows.join("\n") + "\n";
+                            }
+                            const fileParsedData = parseRawText(fullText, { name: fileName });
+                            allParsedData = [...allParsedData, ...fileParsedData];
+                        }
+                        setParsedRows(prev => {
+                            const existingMap = new Set(prev.map(r => r.raw + r.date));
+                            const uniqueNew = allParsedData.filter(r => !existingMap.has(r.raw + r.date));
+                            return [...prev, ...uniqueNew];
+                        });
+                        setIsProcessing(false);
+                    } catch (err) {
+                        console.error("Auto loading PDFs failed:", err);
+                        setIsProcessing(false);
+                    }
+                };
+                loadAutoPDFs();
+            }, []);
+
+            const handleAddPersonnel = () => {
+                const cleanName = newPersonnelName.trim().toLocaleUpperCase('tr-TR');
+                if (cleanName && !personnelList.includes(cleanName)) {
+                    setPersonnelList([...personnelList, cleanName].sort((a, b) => a.localeCompare(b, 'tr-TR')));
+                    setNewPersonnelName("");
+                }
+            };
+
+            const [editingPersonnel, setEditingPersonnel] = useState(null);
+            const [editPersonnelName, setEditPersonnelName] = useState("");
+
+            const handleDeletePersonnel = (e, name) => {
+                e.stopPropagation();
+                if (window.confirm(`${name} isimli personeli silmek istediğinize emin misiniz?`)) {
+                    setPersonnelList(personnelList.filter(p => p !== name));
+                    if (selectedPersonnel === name) setSelectedPersonnel("TÜMÜ");
+                }
+            };
+
+            const startEditingPersonnel = (e, name) => {
+                e.stopPropagation();
+                setEditingPersonnel(name);
+                setEditPersonnelName(name);
+            };
+
+            const handleUpdatePersonnel = (e, oldName) => {
+                e.stopPropagation();
+                const cleanName = editPersonnelName.trim().toLocaleUpperCase('tr-TR');
+
+                if (!cleanName || cleanName === oldName) {
+                    setEditingPersonnel(null);
+                    return;
+                }
+
+                if (personnelList.includes(cleanName) && cleanName !== oldName) {
+                    alert("Bu isimde bir personel zaten var!");
+                    return;
+                }
+
+                const updatedList = personnelList.map(p => p === oldName ? cleanName : p).sort((a, b) => a.localeCompare(b, 'tr-TR'));
+                setPersonnelList(updatedList);
+
+                if (selectedPersonnel === oldName) {
+                    setSelectedPersonnel(cleanName);
+                }
+                setEditingPersonnel(null);
+            };
+
+            const uniqueDatesList = useMemo(() => {
+                if (!parsedRows.length) return [];
+                return [...new Set(parsedRows.map(r => r.date))].sort((a, b) => {
+                    const da = a.split('.').reverse().join('');
+                    const db = b.split('.').reverse().join('');
+                    return db.localeCompare(da);
+                });
+            }, [parsedRows]);
+
+            // Mesai Kuralları (Dakika cinsinden)
+            const RULES = useMemo(() => ({
+                morningStart: toleranceEnabled ? (parseTime(morningStartStr) + toleranceMinutes) : parseTime(morningStartStr),
+                morningEnd: parseTime(morningEndStr),
+                afternoonStart: parseTime(afternoonStartStr),
+                afternoonEnd: toleranceEnabled ? (parseTime(afternoonEndStr) - toleranceMinutes) : parseTime(afternoonEndStr),
+                standardStart: parseTime(morningStartStr),
+                standardEnd: parseTime(standardEndStr)
+            }), [toleranceEnabled, toleranceMinutes, morningStartStr, morningEndStr, afternoonStartStr, afternoonEndStr, standardEndStr]);
+
+            const handleFileChange = (e) => {
+                const selectedFiles = Array.from(e.target.files).filter(f => f.type === "application/pdf");
+                if (selectedFiles.length > 0) {
+                    setFiles(selectedFiles);
+                    setError(null);
+                    setActiveFilter('ALL');
+                } else {
+                    setError("Lütfen geçerli PDF dosyaları yükleyin.");
+                }
+            };
+
+            const extractTextFromPDF = async () => {
+                if (!files || files.length === 0) return;
+                setIsProcessing(true);
+                setError(null);
+
+                try {
+                    let allParsedData = [];
+
+                    for (const currentFile of files) {
+                        const arrayBuffer = await currentFile.arrayBuffer();
+                        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+
+                        let fullText = "";
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+
+                            const items = textContent.items.map(item => ({
+                                str: item.str,
+                                y: item.transform[5],
+                                x: item.transform[4]
+                            }));
+
+                            const rows = [];
+                            let currentRowY = -1;
+                            let currentRowText = [];
+
+                            items.sort((a, b) => b.y - a.y || a.x - b.x);
+
+                            items.forEach(item => {
+                                if (currentRowY === -1 || Math.abs(item.y - currentRowY) > 5) {
+                                    if (currentRowText.length > 0) {
+                                        rows.push(currentRowText.join(""));
+                                    }
+                                    currentRowY = item.y;
+                                    currentRowText = [item.str];
+                                } else {
+                                    currentRowText.push(item.str);
+                                }
+                            });
+                            if (currentRowText.length > 0) rows.push(currentRowText.join(""));
+
+                            fullText += rows.join("\n") + "\n";
+                        }
+                        const fileParsedData = parseRawText(fullText, currentFile);
+                        allParsedData = [...allParsedData, ...fileParsedData];
+                    }
+
+                    setParsedRows(prev => {
+                        const existingMap = new Set(prev.map(r => r.raw + r.date));
+                        const uniqueNew = allParsedData.filter(r => !existingMap.has(r.raw + r.date));
+                        return [...prev, ...uniqueNew];
+                    });
+
+                } catch (err) {
+                    console.error(err);
+                    setError("PDF(ler) okunurken bir hata oluştu: " + err.message);
+                    setIsProcessing(false);
+                }
+            };
+
+            const parseRawText = (text, sourceFile) => {
+                const lines = text.split('\n');
+                const data = [];
+                const dateRegex = /(\d{2}\.\d{2}\.\d{4})/;
+
+                lines.forEach(line => {
+                    let cleanLine = line.trim();
+                    if (!cleanLine) return;
+
+                    const dateMatch = cleanLine.match(dateRegex);
+                    if (dateMatch) {
+                        const dateString = dateMatch[0];
+                        const lineWithoutDate = cleanLine.replace(dateString, "   ");
+
+                        const timeRegex = /(\d{1,2}[:.]\d{2})/g;
+                        const times = lineWithoutDate.match(timeRegex) || [];
+
+                        // Gelişmiş İsim Ayıklama: Tüm saatleri, tarihleri ve keywordleri sıyırıp sadece harfleri elde etme
+                        let namePart = lineWithoutDate.replace(timeRegex, " ").toLocaleUpperCase('tr-TR');
+
+                        const wordsToRemove = ["GEÇ GİRİŞ", "ERKEN ÇIKIŞ", "ÇIKIŞ YOK", "GİRİŞ YOK", "GEÇ", "ERKEN", "GİRİŞ", "ÇIKIŞ", "GELMEDİ", "GELMEDI", "HAFTASONU", "GENEL TATİL", "GENEL TATIL", "İZİN", "IZIN", "RAPOR", "GÖREVLİ", "NORMAL", "YOK"];
+                        wordsToRemove.forEach(w => {
+                            namePart = namePart.split(w).join(" ");
+                        });
+
+                        namePart = namePart.replace(/[0-9\-_\*\/\\,;\"\(\)]/g, ' ');
+                        namePart = namePart.replace(/\s+/g, ' ').trim();
+
+                        if (namePart.length < 3) return;
+
+                        const excludeWords = ["SAYFA", "RAPOR", "TURNİKE", "ŞİRKET", "LİSTESİ", "TARİH", "SAAT"];
+                        if (excludeWords.some(ex => namePart.includes(ex))) return;
+
+                        let note = "";
+                        const keywords = ["GELMEDİ", "GELMEDI", "HAFTASONU", "GENEL TATİL", "GENEL TATIL", "ÇIKIŞ YOK", "GİRİŞ YOK", "İZİN", "IZIN", "RAPOR", "GÖREVLİ"];
+                        const upperLine = cleanLine.toLocaleUpperCase('tr-TR');
+
+                        keywords.forEach(k => {
+                            if (upperLine.includes(k.toLocaleUpperCase('tr-TR'))) {
+                                let normalizedKey = k;
+                                if (k === "GELMEDI") normalizedKey = "GELMEDİ";
+                                if (k === "GENEL TATIL") normalizedKey = "GENEL TATİL";
+                                if (k === "IZIN") normalizedKey = "İZİN";
+
+                                if (!note.toLocaleUpperCase('tr-TR').includes(normalizedKey.toLocaleUpperCase('tr-TR'))) {
+                                    note += normalizedKey + " ";
+                                }
+                            }
+                        });
+
+                        data.push({
+                            raw: cleanLine,
+                            name: namePart,
+                            date: dateString,
+                            foundTimes: times,
+                            note: note.trim(),
+                            sourceFile: sourceFile
+                        });
+                    }
+                });
+
+                return data;
+            };
+
+            const calculateStatistics = useCallback(() => {
+                if (!parsedRows.length) return;
+
+                // Dinamik Akıllı Eşleştirme: Her bir kaydı, yeni personel eklense bile, listeye göre dinamik tara:
+                const mappedRows = parsedRows.map(row => {
+                    let finalName = row.name;
+                    for (const p of personnelList) {
+                        if (finalName.includes(p)) {
+                            finalName = p;
+                            break;
+                        }
+                    }
+                    return { ...row, matchedName: finalName };
+                });
+
+                const allNamesInPdf = [...new Set(mappedRows.map(r => r.matchedName))];
+                const allPersonnelToTrack = [...new Set([...personnelList, ...allNamesInPdf])].sort((a, b) => a.localeCompare(b, 'tr-TR'));
+
+                const recordMap = new Map();
+
+                // Çapraz Matris (Günler x Personeller) başlanıyor. Boş kayıtlar Gelmedi olarak açılır:
+                uniqueDatesList.forEach(date => {
+                    allPersonnelToTrack.forEach(name => {
+                        recordMap.set(`${date}|${name}`, {
+                            date: date,
+                            name: name,
+                            allTimes: [],
+                            notes: new Set(["GELMEDİ"])
+                        });
+                    });
+                });
+
+                // Gerçek kayıt verilerini matrise doldur, var olanların "GELMEDİ" etiketini sil (işlem gereği):
+                mappedRows.forEach(row => {
+                    const key = `${row.date}|${row.matchedName}`;
+                    if (recordMap.has(key)) {
+                        const rec = recordMap.get(key);
+                        rec.notes.delete("GELMEDİ");
+
+                        if (row.foundTimes && row.foundTimes.length > 0) {
+                            row.foundTimes.forEach(t => {
+                                const mins = timeToMinutes(t);
+                                if (mins !== null) rec.allTimes.push(mins);
+                            });
+                        }
+                        if (row.note) rec.notes.add(row.note.toLocaleUpperCase('tr-TR'));
+                        if (row.sourceFile && !rec.sourceFile) {
+                            rec.sourceFile = row.sourceFile;
+                        }
+                    }
+                });
+
+                if (recordMap.size === 0) {
+                    setError("Bu isimde veya tarihte kayıt bulunamadı.");
+                    setStats(null);
+                    return;
+                }
+
+                let totalUniqueDays = 0;
+                let gelmediCount = 0;
+                let geldiCount = 0;
+                let gecGirisCount = 0;
+                let erkenCikisCount = 0;
+                let overtimeCount = 0;
+                let izinliCount = 0;
+
+                const processedDays = [];
+
+                recordMap.forEach((dayData) => {
+                    dayData.allTimes.sort((a, b) => a - b);
+
+                    const combinedNotes = Array.from(dayData.notes).join(" ");
+
+                    const [dayStr, monthStr, yearStr] = dayData.date.split('.');
+                    const d = new Date(yearStr, monthStr - 1, dayStr);
+                    const dayOfWeek = d.getDay();
+                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+                    const firstEntry = dayData.allTimes.length > 0 ? dayData.allTimes[0] : null;
+                    const lastExit = dayData.allTimes.length > 1 ? dayData.allTimes[dayData.allTimes.length - 1] : null;
+
+                    let isAbsent = false;
+                    let isLate = false;
+                    let isEarlyExit = false;
+                    let isPresent = false;
+                    let isOvertime = false;
+                    let isOnLeave = false;
+
+                    const isWeekendOrHoliday = isWeekend || combinedNotes.includes("HAFTASONU") || combinedNotes.includes("TATİL");
+
+                    if (combinedNotes.includes("İZİN") || combinedNotes.includes("RAPOR") || combinedNotes.includes("GÖREVLİ")) {
+                        isOnLeave = true;
+                    }
+
+                    if (combinedNotes.includes("GELMEDİ")) {
+                        isAbsent = true;
+                    }
+
+                    // --- TÜM LİSTE GETİRME (FİLTRELERİ KALDIRDIK) ---
+                    // Tüm günleri listeye ekliyoruz.
+                    totalUniqueDays++;
+
+                    let effectiveExit = lastExit;
+
+                    if (!isAbsent && (effectiveExit !== null || firstEntry !== null)) {
+                        isPresent = true;
+                    }
+
+                    // 3. Geç Giriş Kontrolü
+                    // KURAL: Sadece Hafta İçi (!isWeekendOrHoliday) VE Giriş Saati VARSA (firstEntry !== null).
+                    if (!isWeekendOrHoliday && isPresent && firstEntry !== null) {
+                        if (firstEntry > RULES.morningStart) {
+                            if (firstEntry < RULES.morningEnd) isLate = true;
+                            if (firstEntry > RULES.afternoonStart) isLate = true;
+                        }
+                    }
+
+                    // 4. Erken Çıkış Kontrolü
+                    // KURAL: Sadece Hafta İçi (!isWeekendOrHoliday) ise Erken Çıkış say.
+                    if (!isWeekendOrHoliday && isPresent && effectiveExit !== null) {
+                        if (effectiveExit < RULES.afternoonEnd) {
+                            isEarlyExit = true;
+                        }
+                    }
+
+                    // 5. Fazla Mesai Kontrolü
+                    if (isPresent) {
+                        if (isWeekendOrHoliday) {
+                            // Hafta sonu giriş varsa fazla mesaidir
+                            if (firstEntry !== null) {
+                                isOvertime = true;
+                            }
+                        }
+                        else {
+                            // Hafta İçi:
+                            // KURAL: Çıkış saati YOKSA (veya ÇIKIŞ YOK hatası varsa) hesaplama.
+                            // Sadece çıkış saati varsa (effectiveExit !== null) hesapla.
+                            if (effectiveExit !== null && !combinedNotes.includes("ÇIKIŞ YOK")) {
+                                // 1. Akşam 18:30'den sonra çıkış (GİRİŞE BAKILMIYOR ARTIK)
+                                const isLateEnd = effectiveExit > RULES.standardEnd;
+
+                                if (isLateEnd) {
+                                    isOvertime = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // SAYAÇ HESAPLAMA
+                    // Hafta sonları Geldi, Gelmedi, Geç, Erken sayaçlarına ASLA dahil edilmez.
+
+                    let finalStatus = 'Boş';
+                    if (isAbsent) finalStatus = 'Gelmedi';
+                    else if (isOnLeave) finalStatus = 'İzinli';
+                    else if (isPresent) finalStatus = 'Geldi';
+                    else if (isWeekendOrHoliday) finalStatus = 'Tatil/Haftasonu';
+
+                    if (isAbsent && !isWeekendOrHoliday && !isOnLeave) gelmediCount++;
+                    if (isPresent && !isWeekendOrHoliday && !isOnLeave) geldiCount++;
+                    if (isLate && !isWeekendOrHoliday && !isOnLeave) gecGirisCount++;
+                    if (isEarlyExit && !isWeekendOrHoliday && !isOnLeave) erkenCikisCount++;
+
+                    if (isOnLeave && !isWeekendOrHoliday) izinliCount++;
+
+                    if (isOvertime) overtimeCount++;
+
+                    const displayEntry = (isAbsent || isOnLeave || firstEntry === null) ? '' : minutesToTime(firstEntry);
+                    const displayExit = (isAbsent || isOnLeave || combinedNotes.includes("ÇIKIŞ YOK") || effectiveExit === null) ? '' : minutesToTime(effectiveExit);
+
+                    processedDays.push({
+                        date: dayData.date,
+                        name: dayData.name,
+                        status: finalStatus,
+                        entry: displayEntry,
+                        exit: displayExit,
+                        isLate,
+                        isEarlyExit,
+                        isOvertime,
+                        isOnLeave,
+                        isWeekend,
+                        isHoliday: isWeekendOrHoliday,
+                        note: combinedNotes,
+                        sourceFile: dayData.sourceFile
+                    });
+                });
+
+                processedDays.sort((a, b) => {
+                    const da = a.date.split('.').reverse().join('');
+                    const db = b.date.split('.').reverse().join('');
+                    return da.localeCompare(db);
+                });
+
+                setStats({
+                    totalUniqueDays,
+                    gelmediCount,
+                    geldiCount,
+                    gecGirisCount,
+                    erkenCikisCount,
+                    overtimeCount,
+                    izinliCount,
+                    details: processedDays
+                });
+                setActiveFilter('ALL');
+                setError(null);
+            }, [parsedRows, personnelList, uniqueDatesList, RULES]);
+
+            useEffect(() => {
+                if (files && files.length > 0) {
+                    extractTextFromPDF();
+                }
+            }, [files]);
+
+            useEffect(() => {
+                if (parsedRows.length > 0) {
+                    calculateStatistics();
+                }
+            }, [toleranceEnabled, toleranceMinutes, calculateStatistics, parsedRows]);
+
+            const baseFilteredDetails = useMemo(() => {
+                if (!stats || !stats.details) return [];
+                let temp = stats.details;
+
+                // 1. Sol Menü Personel Filtresi
+                if (selectedPersonnel !== "TÜMÜ") {
+                    temp = temp.filter(d => d.name === selectedPersonnel);
+                }
+
+                // 2. Global Search (İsim, Tarih, Durum, Not)
+                if (globalSearch.trim()) {
+                    const term = globalSearch.toLocaleLowerCase('tr-TR').trim();
+                    temp = temp.filter(d =>
+                        d.name.toLocaleLowerCase('tr-TR').includes(term) ||
+                        d.date.includes(term) ||
+                        (d.note && d.note.toLocaleLowerCase('tr-TR').includes(term)) ||
+                        d.status.toLocaleLowerCase('tr-TR').includes(term)
+                    );
+                }
+
+                // 3. Takvim Filtresi
+                if (selectedCalendarDate) {
+                    temp = temp.filter(d => d.date === selectedCalendarDate);
+                }
+
+                return temp;
+            }, [stats, selectedPersonnel, globalSearch, selectedCalendarDate]);
+
+            const dynamicStats = useMemo(() => {
+                let gelmediCount = 0;
+                let geldiCount = 0;
+                let gecGirisCount = 0;
+                let erkenCikisCount = 0;
+                let overtimeCount = 0;
+                let izinliCount = 0;
+                let uniqueDaysSet = new Set();
+
+                if (baseFilteredDetails) {
+                    baseFilteredDetails.forEach(d => {
+                        uniqueDaysSet.add(d.date);
+
+                        if (d.status === 'Gelmedi' && !d.isHoliday && !d.isOnLeave) gelmediCount++;
+                        if (d.status === 'Geldi' && !d.isHoliday && !d.isOnLeave) geldiCount++;
+                        if (d.isLate && !d.isHoliday && !d.isOnLeave) gecGirisCount++;
+                        if (d.isEarlyExit && !d.isHoliday && !d.isOnLeave) erkenCikisCount++;
+                        if (d.isOnLeave && !d.isHoliday) izinliCount++;
+                        if (d.isOvertime) overtimeCount++;
+                    });
+                }
+
+                return {
+                    totalUniqueDays: uniqueDaysSet.size,
+                    gelmediCount, geldiCount, gecGirisCount, erkenCikisCount, overtimeCount, izinliCount
+                };
+            }, [baseFilteredDetails]);
+
+            const filteredDetails = useMemo(() => {
+                if (!baseFilteredDetails) return [];
+
+                let temp = baseFilteredDetails;
+
+                // 3. Üst Kart Filtresi (Durum)
+                switch (activeFilter) {
+                    case 'ABSENT': temp = temp.filter(d => d.status === 'Gelmedi' && !d.isHoliday); break;
+                    case 'LEAVE': temp = temp.filter(d => d.isOnLeave); break;
+                    case 'PRESENT': temp = temp.filter(d => d.status === 'Geldi' && !d.isHoliday); break;
+                    case 'LATE': temp = temp.filter(d => d.isLate && !d.isHoliday); break;
+                    case 'EARLY': temp = temp.filter(d => d.isEarlyExit && !d.isHoliday); break;
+                    case 'OVERTIME': temp = temp.filter(d => d.isOvertime); break;
+                    default: break;
+                }
+
+                return temp;
+            }, [baseFilteredDetails, activeFilter]);
+
+            const getFilterTitle = () => {
+                switch (activeFilter) {
+                    case 'ABSENT': return "Filtre: Gelmediği Günler (Hafta İçi)";
+                    case 'LEAVE': return "Filtre: İzinli / Raporlu Günler";
+                    case 'PRESENT': return "Filtre: Geldiği Günler (Hafta İçi)";
+                    case 'LATE': return "Filtre: Geç Kaldığı Günler (Hafta İçi)";
+                    case 'EARLY': return "Filtre: Erken Çıktığı Günler (Hafta İçi)";
+                    case 'OVERTIME': return "Filtre: Fazla Mesai Günleri";
+                    default: return "Tüm Günler";
+                }
+            };
+
+            const getRowStyle = (day) => {
+                if (day.status === 'Gelmedi') return 'bg-red-50';
+                if (day.isOnLeave) return 'bg-teal-50/50';
+                if (day.isHoliday) return 'bg-slate-100'; // Hafta sonu rengi
+                return 'bg-white'; // Hafta içi rengi
+            };
+
+            return (
+                <div className="flex flex-col lg:flex-row min-h-screen bg-[#f8fafc] font-sans overflow-x-hidden">
+                    {/* Sol Menü (Sidebar) */}
+                    <aside className="w-full lg:w-72 bg-white border-r border-gray-200 flex flex-col shrink-0 lg:h-screen lg:sticky top-0 z-40">
+                        {/* Calendar */}
+                        <div className="p-4 border-b border-gray-100 hidden md:block">
+                            <MiniCalendar selectedDate={selectedCalendarDate} onSelectDate={setSelectedCalendarDate} />
+                        </div>
+
+                        {/* Personnel List */}
+                        <div className="p-4 flex flex-col flex-1 min-h-[300px] overflow-hidden">
+                            <div className="flex items-center justify-between mb-4">
+                                <span className="text-[11px] font-bold text-gray-500 tracking-wider">PERSONEL</span>
+                                <button onClick={() => setSelectedPersonnel('TÜMÜ')} className={`text-[11px] font-bold tracking-wider hover:text-blue-800 transition-colors ${selectedPersonnel === 'TÜMÜ' ? 'text-blue-700' : 'text-blue-500'}`}>TÜMÜ</button>
+                            </div>
+
+                            <div className="flex gap-2 mb-4">
+                                <input
+                                    type="text"
+                                    value={newPersonnelName}
+                                    onChange={e => setNewPersonnelName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleAddPersonnel()}
+                                    placeholder="Ekle..."
+                                    className="flex-1 border border-gray-200 rounded px-2 py-1.5 text-sm outline-none focus:border-blue-500 transition-colors placeholder:text-gray-400"
+                                />
+                                <button onClick={handleAddPersonnel} className="bg-blue-400 hover:bg-blue-500 text-white rounded w-8 flex flex-col items-center justify-center font-bold text-lg pb-0.5 transition-colors shrink-0 leading-none shadow-sm">+</button>
+                            </div>
+
+                            <div className="overflow-y-auto flex-1 space-y-0.5 -mx-2 px-2 custom-scrollbar">
+                                {personnelList.map(p => (
+                                    <div
+                                        key={p}
+                                        onClick={() => { if (editingPersonnel !== p) setSelectedPersonnel(p); }}
+                                        className={`group flex items-center justify-between text-[13px] py-2.5 px-3 rounded cursor-pointer transition-colors ${selectedPersonnel === p ? 'bg-blue-50/80 text-blue-700 font-semibold shadow-sm ring-1 ring-blue-100/50' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                                    >
+                                        {editingPersonnel === p ? (
+                                            <div className="flex items-center gap-1 w-full" onClick={e => e.stopPropagation()}>
+                                                <input
+                                                    type="text"
+                                                    value={editPersonnelName}
+                                                    onChange={e => setEditPersonnelName(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') handleUpdatePersonnel(e, p);
+                                                        if (e.key === 'Escape') setEditingPersonnel(null);
+                                                    }}
+                                                    autoFocus
+                                                    className="flex-1 min-w-0 border w-full text-gray-800 border-blue-300 rounded px-1.5 py-0.5 text-xs outline-none focus:border-blue-500"
+                                                />
+                                                <button onClick={(e) => handleUpdatePersonnel(e, p)} className="p-1 hover:bg-blue-100 text-blue-600 rounded">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                </button>
+                                                <button onClick={() => setEditingPersonnel(null)} className="p-1 hover:bg-red-100 text-red-500 rounded">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <span className="truncate pr-2">{p}</span>
+                                                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={(e) => startEditingPersonnel(e, p)} className="p-1 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded" title="Düzenle">
+                                                        <Edit className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={(e) => handleDeletePersonnel(e, p)} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded" title="Sil">
+                                                        <Trash className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </aside>
+
+                    {/* Ana İçerik */}
+                    <div className="flex-1 flex flex-col min-w-0">
+                        {/* Header */}
+                        <header className="bg-white border-b border-gray-200 py-3 px-4 flex flex-wrap items-center gap-4 sticky top-0 z-30 shadow-sm overflow-x-auto">
+                            <div className="flex items-center gap-2 shrink-0">
+                                <BarChart className="text-blue-600 w-5 h-5 md:w-6 md:h-6" />
+                                <h1 className="text-base md:text-lg font-bold text-gray-800 whitespace-nowrap">Turnike</h1>
+                            </div>
+
+                            {/* Araç Çubuğu */}
+                            <div className="flex flex-wrap items-center gap-3">
+                                {/* Saat Ayarları */}
+                                <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg p-0.5 text-xs hidden lg:flex shrink-0">
+                                    <div className="flex items-center px-1.5 gap-1">
+                                        <span className="text-gray-600 font-medium whitespace-nowrap">Mesai:</span>
+                                        <input type="time" value={morningStartStr} onChange={e => setMorningStartStr(e.target.value)} className="bg-white border text-gray-600 font-medium border-gray-200 rounded px-1 py-0.5 outline-none w-[80px] xl:w-[85px] tabular-nums cursor-pointer" />
+                                        <span className="text-gray-400">-</span>
+                                        <input type="time" value={morningEndStr} onChange={e => setMorningEndStr(e.target.value)} className="bg-white border text-gray-600 font-medium border-gray-200 rounded px-1 py-0.5 outline-none w-[80px] xl:w-[85px] tabular-nums cursor-pointer" />
+                                    </div>
+                                    <div className="w-px h-4 bg-gray-300 mx-0.5"></div>
+                                    <div className="flex items-center px-1.5 gap-1">
+                                        <input type="time" value={afternoonStartStr} onChange={e => setAfternoonStartStr(e.target.value)} className="bg-white border text-gray-600 font-medium border-gray-200 rounded px-1 py-0.5 outline-none w-[80px] xl:w-[85px] tabular-nums cursor-pointer" />
+                                        <span className="text-gray-400">-</span>
+                                        <input type="time" value={afternoonEndStr} onChange={e => setAfternoonEndStr(e.target.value)} className="bg-white border text-gray-600 font-medium border-gray-200 rounded px-1 py-0.5 outline-none w-[80px] xl:w-[85px] tabular-nums cursor-pointer" />
+                                    </div>
+                                    <div className="w-px h-4 bg-gray-300 mx-0.5"></div>
+                                    <div className="flex items-center px-1.5 gap-1">
+                                        <span className="text-gray-600 font-medium whitespace-nowrap">F. Mesai:</span>
+                                        <input type="time" value={standardEndStr} onChange={e => setStandardEndStr(e.target.value)} className="bg-white border text-gray-600 font-medium border-gray-200 rounded px-1 py-0.5 outline-none w-[80px] xl:w-[85px] tabular-nums cursor-pointer" />
+                                    </div>
+                                </div>
+
+                                {/* Tolerans */}
+                                <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2 shrink-0 h-[32px]">
+                                    <span className={`text-xs font-medium ${!toleranceEnabled ? 'text-gray-800' : 'text-gray-400'}`}>Normal</span>
+                                    <button
+                                        onClick={() => setToleranceEnabled(!toleranceEnabled)}
+                                        className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors focus:outline-none ${toleranceEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                                    >
+                                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${toleranceEnabled ? 'translate-x-[14px]' : 'translate-x-[2px]'}`} />
+                                    </button>
+                                    <span className={`text-xs font-medium ${toleranceEnabled ? 'text-gray-800' : 'text-gray-400'}`}>Tolerans</span>
+                                    {toleranceEnabled && (
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={toleranceMinutes}
+                                            onChange={(e) => setToleranceMinutes(Math.max(0, parseInt(e.target.value) || 0))}
+                                            className="w-9 text-center border bg-white border-gray-200 rounded text-xs py-0.5 outline-none ml-1 tabular-nums"
+                                        />
+                                    )}
+                                </div>
+
+                                {/* Arama Inputu */}
+                                <div className="relative w-full sm:w-[180px] h-[32px] shrink-0">
+                                    <User className="absolute left-2.5 top-2 h-3.5 w-3.5 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={globalSearch}
+                                        onChange={(e) => setGlobalSearch(e.target.value)}
+                                        placeholder="Ara (İsim, Not...)"
+                                        className="pl-8 w-full h-full rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 text-xs outline-none transition-colors placeholder:text-gray-400"
+                                    />
+                                </div>
+                            </div>
+
+
+                            <label className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 border-dashed rounded-lg cursor-pointer hover:bg-blue-100 transition whitespace-nowrap shrink-0 h-[32px]">
+                                <Upload className="w-3.5 h-3.5" />
+                                <span className="font-semibold text-xs">PDF Yükle</span>
+                                <input type="file" multiple accept=".pdf" onChange={handleFileChange} className="hidden" />
+                            </label>
+
+                            {/* Hata veya Yükleniyor Durumu */}
+                            {isProcessing && <span className="text-sm text-blue-600 animate-pulse font-medium">Okunuyor...</span>}
+
+                            <div className="flex-1 min-w-0"></div>
+                        </header>
+
+                        <main className="flex-1 p-4 md:p-6 max-w-[1600px] mx-auto w-full">
+                            {error && (
+                                <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-md shadow-sm">
+                                    <div className="flex">
+                                        <AlertCircle className="h-5 w-5 text-red-500" />
+                                        <p className="ml-3 text-sm text-red-700">{error}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {files.length === 0 && !stats && (
+                                <div className="flex flex-col items-center justify-center h-[60vh] text-gray-500">
+                                    <Upload className="w-16 h-16 text-gray-300 mb-4" />
+                                    <h2 className="text-xl font-medium text-gray-600">PDF Raporlarını Yükleyin</h2>
+                                    <p className="text-sm mt-2 text-gray-400">Analize başlamak için üst menüden dilediğiniz kadar PDF dosyası seçin.</p>
+                                </div>
+                            )}
+
+                            {stats && (
+                                <div className="animate-fade-in space-y-6">
+                                    {/* Header Info */}
+                                    <div className="flex items-center justify-between border-b pb-2">
+                                        <h2 className="text-lg font-semibold text-gray-800">
+                                            {selectedPersonnel === "TÜMÜ" ? 'Tüm Kayıtlar' : selectedPersonnel} - <span className="font-normal text-gray-600">Özet Rapor</span>
+                                        </h2>
+                                        <span className="text-sm text-gray-500 bg-white px-3 py-1 rounded-full border shadow-sm">
+                                            Kayıt: <span className="font-semibold text-gray-800">{dynamicStats?.totalUniqueDays || 0}</span> Gün
+                                        </span>
+                                    </div>
+
+                                    {/* İstatistik Kartları */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 md:gap-4">
+                                        <div
+                                            onClick={() => setActiveFilter('ALL')}
+                                            className={`bg-white shadow-sm p-4 rounded-xl border cursor-pointer hover:bg-blue-50/50 transition ${activeFilter === 'ALL' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'}`}
+                                        >
+                                            <p className="text-[11px] text-blue-600 font-bold uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                                                <Calendar className="w-3 h-3" />
+                                                Tekil Gün
+                                            </p>
+                                            <p className="text-2xl font-bold text-gray-800">{dynamicStats.totalUniqueDays}</p>
+                                        </div>
+                                        <div
+                                            onClick={() => setActiveFilter('LEAVE')}
+                                            className={`bg-white shadow-sm p-4 rounded-xl border cursor-pointer hover:bg-teal-50/50 transition ${activeFilter === 'LEAVE' ? 'border-teal-500 ring-1 ring-teal-500' : 'border-gray-200'}`}
+                                        >
+                                            <p className="text-[11px] text-teal-600 font-bold uppercase tracking-wider mb-1.5">İzin / Rapor</p>
+                                            <p className="text-2xl font-bold text-gray-800">{dynamicStats.izinliCount}</p>
+                                        </div>
+                                        <div
+                                            onClick={() => setActiveFilter('ABSENT')}
+                                            className={`bg-white shadow-sm p-4 rounded-xl border cursor-pointer hover:bg-red-50/50 transition ${activeFilter === 'ABSENT' ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'}`}
+                                        >
+                                            <p className="text-[11px] text-red-600 font-bold uppercase tracking-wider mb-1.5">Gelmedi</p>
+                                            <p className="text-2xl font-bold text-gray-800">{dynamicStats.gelmediCount}</p>
+                                        </div>
+                                        <div
+                                            onClick={() => setActiveFilter('PRESENT')}
+                                            className={`bg-white shadow-sm p-4 rounded-xl border cursor-pointer hover:bg-green-50/50 transition ${activeFilter === 'PRESENT' ? 'border-green-500 ring-1 ring-green-500' : 'border-gray-200'}`}
+                                        >
+                                            <p className="text-[11px] text-green-600 font-bold uppercase tracking-wider mb-1.5">Geldi</p>
+                                            <p className="text-2xl font-bold text-gray-800">{dynamicStats.geldiCount}</p>
+                                        </div>
+                                        <div
+                                            onClick={() => setActiveFilter('LATE')}
+                                            className={`bg-white shadow-sm p-4 rounded-xl border cursor-pointer hover:bg-yellow-50/50 transition ${activeFilter === 'LATE' ? 'border-yellow-500 ring-1 ring-yellow-500' : 'border-gray-200'}`}
+                                        >
+                                            <p className="text-[11px] text-yellow-600 font-bold uppercase tracking-wider mb-1.5">Geç Giriş</p>
+                                            <p className="text-2xl font-bold text-gray-800">{dynamicStats.gecGirisCount}</p>
+                                        </div>
+                                        <div
+                                            onClick={() => setActiveFilter('EARLY')}
+                                            className={`bg-white shadow-sm p-4 rounded-xl border cursor-pointer hover:bg-orange-50/50 transition ${activeFilter === 'EARLY' ? 'border-orange-500 ring-1 ring-orange-500' : 'border-gray-200'}`}
+                                        >
+                                            <p className="text-[11px] text-orange-600 font-bold uppercase tracking-wider mb-1.5">Erken Çıkış</p>
+                                            <p className="text-2xl font-bold text-gray-800">{dynamicStats.erkenCikisCount}</p>
+                                        </div>
+                                        <div
+                                            onClick={() => setActiveFilter('OVERTIME')}
+                                            className={`bg-white shadow-sm p-4 rounded-xl border cursor-pointer hover:bg-purple-50/50 transition ${activeFilter === 'OVERTIME' ? 'border-purple-500 ring-1 ring-purple-500' : 'border-gray-200'}`}
+                                        >
+                                            <p className="text-[11px] text-purple-600 font-bold uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                                                <Briefcase className="w-3 h-3" />
+                                                Fazla Mesai
+                                            </p>
+                                            <p className="text-2xl font-bold text-gray-800">{dynamicStats.overtimeCount}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Tablo / Akordiyon Alanı */}
+                                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+                                        <div className="bg-gray-50/80 px-5 py-3.5 border-b border-gray-200 flex justify-between items-center">
+                                            <h3 className="text-sm font-semibold text-gray-700">{getFilterTitle()}</h3>
+                                        </div>
+                                        <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
+                                            {(() => {
+                                                const groupedByDate = filteredDetails.reduce((acc, current) => {
+                                                    if (!acc[current.date]) acc[current.date] = [];
+                                                    acc[current.date].push(current);
+                                                    return acc;
+                                                }, {});
+
+                                                const dateKeys = Object.keys(groupedByDate).sort((a, b) => {
+                                                    const d1 = a.split('.').reverse().join('');
+                                                    const d2 = b.split('.').reverse().join('');
+                                                    return d2.localeCompare(d1);
+                                                });
+
+                                                if (dateKeys.length === 0) {
+                                                    return (
+                                                        <div className="px-5 py-16 text-center text-gray-500">
+                                                            <div className="flex flex-col items-center justify-center">
+                                                                <FileText className="w-10 h-10 text-gray-300 mb-3" />
+                                                                <p className="text-base font-medium text-gray-500">Kayıt Bulunamadı</p>
+                                                                <p className="text-sm mt-1 text-gray-400">Bu kriterlere uygun bir veri yok.</p>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return dateKeys.map(dateKey => (
+                                                    <details key={dateKey} className="group border-b border-gray-100 last:border-none" open={true}>
+                                                        <summary className="flex cursor-pointer items-center justify-between bg-white px-5 py-4 hover:bg-gray-50/50 transition-colors list-none select-none outline-none">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-8 h-8 rounded bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shadow-sm ring-1 ring-blue-100">
+                                                                    <span>{groupedByDate[dateKey].length}</span>
+                                                                </div>
+                                                                <h4 className="text-[15px] font-bold text-gray-800">{dateKey}</h4>
+                                                                {(() => {
+                                                                    const sourceFile = groupedByDate[dateKey].find(r => r.sourceFile)?.sourceFile;
+                                                                    if (sourceFile) {
+                                                                        return (
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    e.stopPropagation();
+                                                                                    const pdfUrl = sourceFile.size ? URL.createObjectURL(sourceFile) : `/turnike_kayıt/${sourceFile.name}`;
+                                                                                    setSelectedPdfBlob(pdfUrl);
+                                                                                }}
+                                                                                className="ml-3 flex items-center gap-1.5 text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-600 hover:text-white px-2.5 py-1 rounded-lg transition-colors shadow-sm"
+                                                                            >
+                                                                                <Eye className="w-3.5 h-3.5" /> PDF Önizleme
+                                                                            </button>
+                                                                        );
+                                                                    }
+                                                                    return null;
+                                                                })()}
+                                                            </div>
+                                                            <div className="text-gray-400 group-open:rotate-180 transition-transform ml-auto pl-4">
+                                                                <ChevronLeft className="w-5 h-5 -rotate-90" />
+                                                            </div>
+                                                        </summary>
+                                                        <div className="px-5 pb-4 pt-1 bg-gray-50/30">
+                                                            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+                                                                <table className="min-w-full divide-y divide-gray-200">
+                                                                    <thead className="bg-gray-50/80">
+                                                                        <tr>
+                                                                            <th className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest w-1/4">Personel</th>
+                                                                            <th className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest w-24">İlk Giriş</th>
+                                                                            <th className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest w-24">Son Çıkış</th>
+                                                                            <th className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Durumlar</th>
+                                                                            <th className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest w-1/3">Notlar</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-gray-100">
+                                                                        {groupedByDate[dateKey].map((day, idx) => (
+                                                                            <tr key={idx} className={`${getRowStyle(day)} hover:bg-blue-50/30 transition-colors group/row`}>
+                                                                                <td className="whitespace-nowrap px-5 py-3.5 text-sm font-semibold text-gray-900">{day.name}</td>
+                                                                                <td className="whitespace-nowrap px-5 py-3.5 text-sm text-gray-600 font-mono tracking-tight">{day.entry || '-'}</td>
+                                                                                <td className="whitespace-nowrap px-5 py-3.5 text-sm text-gray-600 font-mono tracking-tight">{day.exit || '-'}</td>
+                                                                                <td className="px-5 py-3.5 text-sm">
+                                                                                    <div className="flex gap-1.5 flex-wrap">
+                                                                                        {day.isLate && <span className="inline-flex items-center rounded bg-yellow-100 px-2 py-0.5 text-[11px] font-semibold text-yellow-800 border border-yellow-200">Geç</span>}
+                                                                                        {day.isEarlyExit && <span className="inline-flex items-center rounded bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800 border border-orange-200">Erken</span>}
+                                                                                        {day.isOvertime && <span className="inline-flex items-center rounded bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-800 border border-purple-200">Mesai</span>}
+                                                                                        {day.status === 'Gelmedi' && <span className="inline-flex items-center rounded bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800 border border-red-200">Yok</span>}
+                                                                                        {day.isOnLeave && <span className="inline-flex items-center rounded bg-teal-100 px-2 py-0.5 text-[11px] font-semibold text-teal-800 border border-teal-200">İzinli</span>}
+                                                                                        {!day.isLate && !day.isEarlyExit && !day.isOvertime && day.status !== 'Gelmedi' && !day.isOnLeave && !day.isHoliday && <span className="inline-flex items-center rounded bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800 border border-green-200">Normal</span>}
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td className="px-5 py-3.5 text-sm text-gray-500 italic group-hover/row:text-gray-700 transition-colors">{day.note}</td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </div>
+                                                    </details>
+                                                ));
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+
+                    {/* PDF Modal */}
+                    {selectedPdfBlob && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden">
+                                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                        <FileText className="w-5 h-5 text-blue-500" /> PDF Önizleme
+                                    </h3>
+                                    <button
+                                        onClick={() => setSelectedPdfBlob(null)}
+                                        className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                                        title="Kapat"
+                                    >
+                                        <X className="w-6 h-6" />
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-hidden bg-gray-100 p-2">
+                                    <iframe src={selectedPdfBlob} className="w-full h-full rounded shadow-sm border border-gray-200 bg-white" title="PDF Önizleme" />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
