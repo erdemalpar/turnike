@@ -1135,6 +1135,7 @@
                 let gecGirisCount = 0;
                 let erkenCikisCount = 0;
                 let overtimeCount = 0;
+                let after18Count = 0;
                 let izinliCount = 0;
 
                 const processedDays = [];
@@ -1218,6 +1219,9 @@
                         }
                     }
 
+                    // 6. 18:00 Sonrası Çıkış Kontrolü
+                    const isAfter18 = isPresent && effectiveExit !== null && effectiveExit > 1080; // 1080 = 18 * 60
+
                     // SAYAÇ HESAPLAMA
                     // Hafta sonları Geldi, Gelmedi, Geç, Erken sayaçlarına ASLA dahil edilmez.
 
@@ -1235,6 +1239,7 @@
                     if (isOnLeave && !isWeekendOrHoliday) izinliCount++;
 
                     if (isOvertime) overtimeCount++;
+                    if (isAfter18) after18Count++;
 
                     const displayEntry = (isAbsent || isOnLeave || firstEntry === null) ? '' : minutesToTime(firstEntry);
                     const displayExit = (isAbsent || isOnLeave || effectiveExit === null) ? '' : minutesToTime(effectiveExit);
@@ -1251,6 +1256,7 @@
                         isOnLeave,
                         isWeekend,
                         isHoliday: isWeekendOrHoliday,
+                        isAfter18: isAfter18,
                         note: combinedNotes,
                         sourceFile: dayData.sourceFile
                     });
@@ -1270,6 +1276,7 @@
                     erkenCikisCount,
                     overtimeCount,
                     izinliCount,
+                    after18Count,
                     details: processedDays
                 });
                 setActiveFilter('ALL');
@@ -1323,6 +1330,7 @@
                 let erkenCikisCount = 0;
                 let overtimeCount = 0;
                 let izinliCount = 0;
+                let after18Count = 0;
                 let uniqueDaysSet = new Set();
 
                 if (baseFilteredDetails) {
@@ -1335,12 +1343,13 @@
                         if (d.isEarlyExit && !d.isHoliday && !d.isOnLeave) erkenCikisCount++;
                         if (d.isOnLeave && !d.isHoliday) izinliCount++;
                         if (d.isOvertime) overtimeCount++;
+                        if (d.isAfter18) after18Count++;
                     });
                 }
 
                 return {
                     totalUniqueDays: uniqueDaysSet.size,
-                    gelmediCount, geldiCount, gecGirisCount, erkenCikisCount, overtimeCount, izinliCount,
+                    gelmediCount, geldiCount, gecGirisCount, erkenCikisCount, overtimeCount, izinliCount, after18Count,
                     details: baseFilteredDetails
                 };
             }, [baseFilteredDetails]);
@@ -1358,6 +1367,7 @@
                     case 'LATE': temp = temp.filter(d => d.isLate && !d.isHoliday); break;
                     case 'EARLY': temp = temp.filter(d => d.isEarlyExit && !d.isHoliday); break;
                     case 'OVERTIME': temp = temp.filter(d => d.isOvertime); break;
+                    case 'AFTER_18': temp = temp.filter(d => d.isAfter18); break;
                     default: break;
                 }
 
@@ -1371,8 +1381,9 @@
                     case 'PRESENT': return "Filtre: Geldiği Günler (Hafta İçi)";
                     case 'LATE': return "Filtre: Geç Kaldığı Günler (Hafta İçi)";
                     case 'EARLY': return "Filtre: Erken Çıktığı Günler (Hafta İçi)";
-                    case 'OVERTIME': return "Filtre: Fazla Mesai Günleri";
-                    default: return "Tüm Günler";
+                    case 'OVERTIME': return 'Fazla Mesai Yapanlar';
+                    case 'AFTER_18': return '18:00 Sonrası Çıkış Yapanlar';
+                    default: return 'Tüm Kayıtlar';
                 }
             };
 
@@ -1646,7 +1657,7 @@
                                     </div>
 
                                     {/* İstatistik Kartları */}
-                                    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 md:gap-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 md:gap-4">
                                         <div
                                             onClick={() => setActiveFilter('ALL')}
                                             className={`bg-white shadow-sm p-4 rounded-xl border cursor-pointer hover:bg-blue-50/50 transition ${activeFilter === 'ALL' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'}`}
@@ -1701,6 +1712,16 @@
                                                 Fazla Mesai
                                             </p>
                                             <p className="text-2xl font-bold text-gray-800">{dynamicStats.overtimeCount}</p>
+                                        </div>
+                                        <div
+                                            onClick={() => setActiveFilter('AFTER_18')}
+                                            className={`bg-white shadow-sm p-4 rounded-xl border cursor-pointer hover:bg-indigo-50/50 transition ${activeFilter === 'AFTER_18' ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-gray-200'}`}
+                                        >
+                                            <p className="text-[11px] text-indigo-600 font-bold uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                                                <Clock className="w-3 h-3" />
+                                                18:00 Sonrası
+                                            </p>
+                                            <p className="text-2xl font-bold text-gray-800">{dynamicStats.after18Count}</p>
                                         </div>
                                     </div>
 
