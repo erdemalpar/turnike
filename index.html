@@ -1207,7 +1207,7 @@
                             // Hafta İçi:
                             // KURAL: Çıkış saati YOKSA (veya ÇIKIŞ YOK hatası varsa) hesaplama.
                             // Sadece çıkış saati varsa (effectiveExit !== null) hesapla.
-                            if (effectiveExit !== null && !combinedNotes.includes("ÇIKIŞ YOK")) {
+                            if (effectiveExit !== null) {
                                 // 1. Akşam 18:30'den sonra çıkış (GİRİŞE BAKILMIYOR ARTIK)
                                 const isLateEnd = effectiveExit > RULES.standardEnd;
 
