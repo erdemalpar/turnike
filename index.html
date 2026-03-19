@@ -1183,8 +1183,7 @@
                     // KURAL: Sadece Hafta İçi (!isWeekendOrHoliday) VE Giriş Saati VARSA (firstEntry !== null).
                     if (!isWeekendOrHoliday && isPresent && firstEntry !== null) {
                         if (firstEntry > RULES.morningStart) {
-                            if (firstEntry < RULES.morningEnd) isLate = true;
-                            if (firstEntry > RULES.afternoonStart) isLate = true;
+                            isLate = true;
                         }
                     }
 
